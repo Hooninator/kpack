@@ -19,6 +19,8 @@ contains
         real(dp) :: work(4*(maxiters - 1))
         real(dp) :: N(0)
 
+        real(dp) :: ortho_err = 0
+
         integer :: info
 
         allocate(Q(A%m1, A%n1))
@@ -29,11 +31,17 @@ contains
         call lanczos_bidiag(A, U, V, B, maxiters)
         print*, "Done with lanczos"
 
+        ortho_err = measure_orthogonality(transpose(U))
+        print*, "Orthogonality of U: ", ortho_err
+        ortho_err = measure_orthogonality(transpose(V))
+        print*, "Orthogonality of V: ", ortho_err
+
         ! Compute singular vectors and values of B
         print*, "Computing SVD..."
         call DBDSQR('U', maxiters, A%m2 * A%n2, A%m1 * A%n1, 0, D, B(1, 1:maxiters-1), transpose(V), maxiters, U,&
             A%m1 * A%n1, N, 1, work, info)
-        print*, "Done computing SVD"
+        call check_lapack(info)
+        print*, "Done computing SVD -- Info: ", info
 
         ! Reshape the arrays into the approximation matrices
         Q = reshape(U(:, 1), (/A%m1, A%n1/))
@@ -64,11 +72,11 @@ contains
 
                 kprod_val = Q(Qi, Qj) * C(Ci, Cj)
 
-                err = err + abs( A%vals(j) - kprod_val )**2
+                err = err + ( A%vals(j) - kprod_val )**2
             end do
         end do
 
-        err = err / norm2(A%vals)
+        err = sqrt(err) / norm2(A%vals)
 
     end function
 

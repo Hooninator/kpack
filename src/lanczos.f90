@@ -67,5 +67,33 @@ contains
     end subroutine 
 
 
+    function measure_orthogonality(Q) result (err)
+        real(dp), intent(in) :: Q(:,:)
+        real(dp) :: err
+
+        real(dp), allocatable :: I_tilde(:,:)
+
+        integer :: m, n, i, j
+
+        m = size(Q, 1)
+        n = size(Q, 2)
+
+        allocate(I_tilde(m,m))
+
+        call DGEMM('N', 'T', m, m, n, 1.0, Q, m, Q, m, 0.0, I_tilde, m)
+
+        err = 0
+        do i=1, m
+            do j = 1, m
+                if (i == j) then
+                    err = err + (I_tilde(i,i) - 1)**2
+                else
+                    err = err + (I_tilde(i,i))**2
+                end if
+            end do
+        end do
+
+        err = sqrt(err)
+    end function
 
 end module lanczos

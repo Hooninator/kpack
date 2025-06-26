@@ -29,6 +29,8 @@ contains
         integer :: i
         integer :: rowidx 
 
+        integer :: pattern = 0, symmetric = 0
+
 
         fd = 1
         start_line = 1
@@ -37,15 +39,24 @@ contains
 
 
         !! Advance until end of header
-        read(fd, *) line
-        start_line = start_line + 1
+        read(fd, '(A)') line
+        if (index(line, "pattern") /= 0) then
+            pattern = 1
+            print*, "This is a pattern matrix"
+        end if
+        if (index(line, "symmetric") /= 0) then
+            symmetric = 1
+            print*, "This is a symmetric matrix, this can't handle those yet"
+            call ABORT()
+        end if
+
         do while (index(line, '%') /= 0)
-            read(fd, *) line
+            read(fd, '(A)') line
             start_line = start_line + 1
         end do
         
         !! Start over
-        start_line = start_line - 2
+        start_line = start_line - 1
         rewind(fd)
         do i=1, start_line
             read(fd,*) line
@@ -73,7 +84,12 @@ contains
 
         !! Parse the actual values 
         do i=1, nnz
-            read(fd,*) rowidx, A%colinds(i), A%vals(i)
+            if (pattern == 1) then
+                read(fd,*) rowidx, A%colinds(i)
+                A%vals(i) = 1
+            else
+                read(fd,*) rowidx, A%colinds(i), A%vals(i)
+            end if
             rowcounts(rowidx) = rowcounts(rowidx) + 1
         end do
 

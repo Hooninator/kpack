@@ -14,12 +14,12 @@ add_library(kpack SHARED
             src/kpack.f90)
 
 
-target_compile_options(kpack PUBLIC -O3 -std=f2008)
+target_compile_options(kpack PUBLIC -O3 -std=gnu -cpp)
 
 
 macro(add_test test_name)
     add_executable(${test_name} test/${test_name}.f90)
-    target_compile_options(${test_name} PUBLIC -O3 -std=f2008)
+    target_compile_options(${test_name} PUBLIC -O3 -std=gnu -cpp)
     target_link_libraries(${test_name} PUBLIC kpack)
 endmacro()
 

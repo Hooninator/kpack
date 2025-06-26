@@ -27,5 +27,14 @@ contains
         end do
 
     end subroutine rand_vec
+
+
+    subroutine check_lapack(info)
+        integer :: info
+        if (info /= 0) then
+            print*, "LAPACK function at line ",__LINE__, " gave info ", info
+            call ABORT()
+        end if
+    end subroutine
     
 end module utils

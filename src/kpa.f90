@@ -15,30 +15,36 @@ contains
         integer, intent(in) :: maxiters
 
         real(dp), allocatable :: U(:,:), V(:,:), B(:,:)
-        real(dp)  :: D(maxiters)
         real(dp) :: work(4*(maxiters - 1))
-        real(dp) :: N(0)
+        real(dp) :: N(maxiters, maxiters)
 
-        real(dp) :: ortho_err = 0
+        real(dp) :: ortho_err
+        real(dp) :: bidiag_err
 
         integer :: info
 
         allocate(Q(A%m1, A%n1))
         allocate(C(A%m2, A%n2))
 
+        print*, "Q : ",A%m1,"x",A%n1
+        print*, "C : ",A%m2,"x",A%n2
+
         ! Bidiagonalize A
         print*, "Beginning lanczos..."
         call lanczos_bidiag(A, U, V, B, maxiters)
         print*, "Done with lanczos"
 
-        ortho_err = measure_orthogonality(transpose(U))
-        print*, "Orthogonality of U: ", ortho_err
-        ortho_err = measure_orthogonality(transpose(V))
+        ortho_err = measure_orthogonality(V)
         print*, "Orthogonality of V: ", ortho_err
+        ortho_err = measure_orthogonality(U)
+        print*, "Orthogonality of U: ", ortho_err
+
+        bidiag_err = measure_bidiag(A, U, V)
+        print*, "Bidiagonality error: ", bidiag_err
 
         ! Compute singular vectors and values of B
         print*, "Computing SVD..."
-        call DBDSQR('U', maxiters, A%m2 * A%n2, A%m1 * A%n1, 0, D, B(1, 1:maxiters-1), transpose(V), maxiters, U,&
+        call DBDSQR('U', maxiters, A%m2 * A%n2, A%m1 * A%n1, 0, B(2, 1:maxiters), B(1, 1:maxiters-1), transpose(V), maxiters, U,&
             A%m1 * A%n1, N, 1, work, info)
         call check_lapack(info)
         print*, "Done computing SVD -- Info: ", info

@@ -11,7 +11,9 @@ add_library(kpack SHARED
             src/utils.f90
             src/kpa.f90
             src/lanczos.f90
-            src/kpack.f90)
+            src/kpack.f90
+            src/lra.f90
+            src/spmm.f90)
 
 
 target_compile_options(kpack PUBLIC -O3 -std=gnu -cpp)

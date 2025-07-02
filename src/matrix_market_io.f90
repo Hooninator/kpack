@@ -70,17 +70,23 @@ contains
         A%nnz = nnz
 
         A%m1 = floor(sqrt(real(m)))
+        do while (mod(m, A%m1) /= 0)
+            A%m1 = A%m1 + 1
+        end do
         A%m2 = m / A%m1
         A%m2 = A%m2 + abs(A%m - A%m2 * A%m1)
 
         A%n1 = floor(sqrt(real(n)))
+        do while (mod(n, A%n1) /= 0)
+            A%n1 = A%n1 + 1
+        end do
         A%n2 = n / A%n1
         A%n2 = A%n2 + abs(A%n - A%n2 * A%n1)
         
         allocate(A%vals(nnz))
         allocate(A%colinds(nnz))
         allocate(rowcounts(m))
-        rowcounts = 1
+        rowcounts = 0
 
         !! Parse the actual values 
         do i=1, nnz
@@ -93,9 +99,10 @@ contains
             rowcounts(rowidx) = rowcounts(rowidx) + 1
         end do
 
-        allocate(A%rowptrs(m+1))
 
         call prefix_sum_integer(rowcounts, A%rowptrs)
+        A%rowptrs(1) = 1
+
 
         close(fd)
 

@@ -4,6 +4,8 @@ project(kpack LANGUAGES Fortran)
 set(CMAKE_Fortran_COMPILER="ftn")
 set(CMAKE_Fortran_MODULE_DIRECTORY="./build")
 
+find_package(OpenMP REQUIRED)
+
 add_library(kpack SHARED
             src/matrix_market_io.f90
             src/csr.f90
@@ -17,11 +19,12 @@ add_library(kpack SHARED
 
 
 target_compile_options(kpack PUBLIC -O3 -std=gnu -cpp)
+target_link_libraries(kpack PUBLIC OpenMP::OpenMP_Fortran)
 
 
 macro(add_test test_name)
     add_executable(${test_name} test/${test_name}.f90)
-    target_compile_options(${test_name} PUBLIC -O3 -std=gnu -cpp)
+    target_compile_options(${test_name} PUBLIC -O3 -std=gnu -cpp )
     target_link_libraries(${test_name} PUBLIC kpack)
 endmacro()
 

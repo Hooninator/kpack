@@ -7,11 +7,14 @@ contains
     subroutine prefix_sum_integer(A, S)
         
         integer, intent(in) :: A(:)
-        integer, intent(out) :: S(:)
+        integer, pointer, intent(out) :: S(:)
         integer :: i
 
-        do i=2, size(A)
-            S(i) = A(i) + A(i - 1)
+        allocate(S(size(A) + 1))
+
+        S(1) = 0
+        do i=2, size(A) + 1
+            S(i) = A(i - 1) + S(i - 1)
         end do
 
     end subroutine prefix_sum_integer

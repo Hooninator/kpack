@@ -14,11 +14,11 @@ contains
         ! We need to set k to the column index of R(A)(i,j)
 
         ! Map i and j to a block A_ij
-        i_block = mod(i, m2) + 1
-        j_block = mod(j, n2) + 1
+        i_block = mod(i, m2)
+        j_block = mod(j, n2) 
 
         ! Column index is determined by which column of A_ij I'm in + a row offset
-        k = j_block * m2 + j_block
+        k = 1 + j_block * m2 + i_block
 
     end function map_x
 
@@ -71,6 +71,7 @@ contains
         ! There might be a better way to do this, but for now I'm just going to iterate through each row and use a mapping function
         ! to determine the right entries of x and y to access.
         ! I'll bet there's potential for some kind of custom storage format that removes random accesses to y
+
         do i = 1, m
             row_start = rowptrs(i)
             row_end = rowptrs(i + 1)

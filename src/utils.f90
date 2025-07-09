@@ -39,5 +39,34 @@ contains
             call ABORT()
         end if
     end subroutine
+
+
+
+    subroutine print_mat(X)
+        real(dp), intent(in) :: X(:,:)
+        integer :: i, j
+
+
+        do j=1, size(X, 2)*15
+            write(*, '(A)', advance='no') "-"
+        end do
+
+        do i = 1, size(X, 1)
+            print *
+            do j = 1, size(X, 2)
+                write(*, "(A)", advance='no') "|"
+                write(*, '(F12.6)', advance='no') X(i,j)
+                write(*, "(A)", advance='no') "|"
+            end do
+            print *
+            do j=1, size(X, 2)*15
+                write(*, '(A)', advance='no') "-"
+            end do
+        end do
+        print *
+
+    end subroutine
+
+
     
 end module utils

@@ -2,6 +2,7 @@ module kpa
 use utils
 use csr
 use lanczos
+use power_method
 
 implicit none
 
@@ -18,7 +19,7 @@ contains
         real(dp), allocatable :: U(:,:), V(:,:), B(:,:)
         real(dp) :: work(5*(maxiters - 1))
         real(dp) :: N(maxiters, maxiters)
-        real(dp) :: u(A%m1*A%n1), v(A%m2*A%n2)
+        real(dp) :: u_vec(maxiters), v_vec(maxiters)
 
         real(dp) :: ortho_err
         real(dp) :: bidiag_err
@@ -43,13 +44,11 @@ contains
 
         ! Compute singular vectors and values of B
         print*, "Computing SVD..."
-        call power_method_bidiag(B, u, sing, 'L')
-        call power_method_bidiag(B, v, sing, 'R')
-        !call DBDSQR('U', maxiters, A%m2 * A%n2, A%m1 * A%n1, 0, B(2, 1:maxiters), B(1, 1:maxiters-1), transpose(V), maxiters, U,&
-        !    A%m1 * A%n1, N, 1, work, info)
-        !call check_lapack(info)
-        !print*, "Done computing SVD -- Info: ", info
-        print*, "Done computing SVD"
+
+        call DBDSQR('U', maxiters, A%m2 * A%n2, A%m1 * A%n1, 0, B(2, 1:maxiters), B(1, 1:maxiters-1), transpose(V), maxiters, U,&
+            A%m1 * A%n1, N, 1, work, info)
+        call check_lapack(info)
+        print*, "Done computing SVD -- Info: ", info
 
         sing = B(2, 1)
 
@@ -78,36 +77,42 @@ contains
         real(dp), intent(in) :: u(:), v(:)
         real(dp), intent(in) :: sing
 
+        real(dp) :: neg_sing
+
         real(dp) :: err
-        real(dp) :: eigval
         real(dp), allocatable :: y1(:), y2(:)
+        real(dp), allocatable :: v2(:)
+        allocate(v2(size(v)))
 
         allocate(y1(A%n))
         allocate(y2(A%m))
         y1 = 0
         y2 = 0
 
-        eigval = sing * sing
-        eigval = eigval * (-1.0_dp)
+        ! U^T*A*V = S
+        ! V^T * A^T * U = S
+        ! V^T * A^T = SU^T
+        ! AV = US
+        ! Av = Us = u * sing
+        ! ...
+        ! A^Tu = v * sing
 
-        !AA^Tu - eigval * u
+        neg_sing = sing * (-1)
         call spmv_permuted(A, u, y1, 1)
-        call spmv_permuted(A, y1, y2, 0)
-        call DAXPY(size(u), eigval, u, 1, y2, 1)
-        err = norm2(y2)
+        call DAXPY(size(v), neg_sing, v, 1, y1, 1)
+        err = norm2(y1)
 
-        print*, "||AA^Tu - eig * u||: ", err
+        print*, "||A^Tu - sing * v||: ", err
 
         y1 = 0
         y2 = 0
 
-        !!A^TAv - eigval * v
+        ! Av = sing * u
         call spmv_permuted(A, v, y2, 0)
-        call spmv_permuted(A, y2, y1, 1)
-        call DAXPY(size(v), eigval, v, 1, y1, 1)
-        err = norm2(y1)
+        call DAXPY(size(u), neg_sing, u, 1, y2, 1)
+        err = norm2(y2)
 
-        print*, "||A^TAv - eig * v||: ", err
+        print*, "||Av - sing * u||: ", err
 
     end subroutine
 

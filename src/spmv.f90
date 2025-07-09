@@ -25,10 +25,12 @@ contains
 
     function map_y(i, j, m1, m2, n1, n2) result(k)
         integer, intent(in) :: i, j, m1, m2, n1, n2
-        integer :: k
+        integer :: k, block_i, block_j
 
         ! Here, we just need the row index of the block we're in
-        k = mod(i, m2) + 1
+        block_i = (i - 1) / m2
+        block_j = (j - 1) / n2
+        k = 1 + block_i + block_j * m1
 
     end function map_y
 

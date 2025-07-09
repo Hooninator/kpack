@@ -3,6 +3,7 @@ use utils
 use csr
 use lanczos
 use power_method
+use trace
 
 implicit none
 
@@ -68,6 +69,29 @@ contains
         real(dp), intent(out), allocatable, dimension(:, :) :: Q, C
         real(dp), intent(out) :: sing
         integer, intent(in) :: maxiters
+
+        integer :: iter, i, j, k
+
+        allocate(Q(A%m1, A%n1))
+        allocate(C(A%m2, A%n2))
+
+        ! Init C randomly
+        call rand_mat(C)
+
+        iter = 1
+        do while (iter <= maxiters)
+
+            ! Update Q
+            call trace_permuted(A, C, Q, 'N')
+
+            ! Update C
+            call trace_permuted(A, Q, C, 'Y')
+
+            iter = iter + 1
+
+        end do
+
+        sing = 1
 
     end subroutine 
 
@@ -135,10 +159,10 @@ contains
 
                 Qi = (i - 1) / A%m1
                 Qj = (colidx - 1) / A%n1
-                Ci = mod(i, A%m2) + 1
-                Cj = mod(colidx, A%n2) + 1
+                Ci = mod(i-1, A%m2)
+                Cj = mod(colidx-1, A%n2)
 
-                kprod_val = sing * Q(Qi+1, Qj+1) * C(Ci, Cj)
+                kprod_val = sing * Q(Qi+1, Qj+1) * C(Ci + 1, Cj + 1)
 
                 err = err + ( A%vals(j) - kprod_val )**2
             end do

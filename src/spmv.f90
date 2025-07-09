@@ -14,8 +14,8 @@ contains
         ! We need to set k to the column index of R(A)(i,j)
 
         ! Map i and j to a block A_ij
-        i_block = mod(i, m2)
-        j_block = mod(j, n2) 
+        i_block = mod(i - 1, m2)
+        j_block = mod(j - 1, n2) 
 
         ! Column index is determined by which column of A_ij I'm in + a row offset
         k = 1 + j_block * m2 + i_block

@@ -32,6 +32,18 @@ contains
     end subroutine rand_vec
 
 
+    subroutine rand_mat(X)
+        real(dp), intent(inout) :: X(:, :)
+        integer :: i, j
+
+        do i = 1, size(X,1)
+            do j = 1, size(X,2)
+                call random_number(X(i,j))
+            end do
+        end do
+    end subroutine
+
+
     subroutine check_lapack(info)
         integer :: info
         if (info /= 0) then

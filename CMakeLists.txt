@@ -15,10 +15,12 @@ add_library(kpack SHARED
             src/lanczos.f90
             src/kpack.f90
             src/lra.f90
-            src/spmm.f90)
+            src/spmm.f90
+            src/power_method.f90
+            src/trace.f90)
 
 
-target_compile_options(kpack PUBLIC -O3 -std=gnu -cpp)
+target_compile_options(kpack PUBLIC -O3 -std=gnu -cpp )
 target_link_libraries(kpack PUBLIC OpenMP::OpenMP_Fortran)
 
 

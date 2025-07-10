@@ -2,6 +2,7 @@ module io
 
 use utils
 use csr
+use csp
 
 implicit none
 
@@ -69,19 +70,7 @@ contains
         A%n = n
         A%nnz = nnz
 
-        A%m1 = floor(sqrt(real(m)))
-        do while (mod(m, A%m1) /= 0)
-            A%m1 = A%m1 + 1
-        end do
-        A%m2 = m / A%m1
-        A%m2 = A%m2 + abs(A%m - A%m2 * A%m1)
-
-        A%n1 = floor(sqrt(real(n)))
-        do while (mod(n, A%n1) /= 0)
-            A%n1 = A%n1 + 1
-        end do
-        A%n2 = n / A%n1
-        A%n2 = A%n2 + abs(A%n - A%n2 * A%n1)
+        call csr_set_subdims(A)
         
         allocate(A%vals(nnz))
         allocate(A%colinds(nnz))
@@ -107,5 +96,32 @@ contains
         close(fd)
 
     end function read_mm
+
+
+    subroutine dist_read_mm_csp(fpath, A, mapping)
+        character(256), intent(in) :: fpath
+        character, intent(in) :: mapping
+        type(csp_mat), intent(inout) :: A
+
+        type(csr_mat) :: A_csr
+        type(csp_mat) :: A_csp
+
+        A_csr = read_mm(fpath)
+        print*, "Done reading mm"
+        A_csp = csr_to_csp(A_csr)
+        print*, "Done converting to csp"
+
+        ! Distribute blocks to appropriate images
+        if (mapping == "S") then
+            call dist_csp_static(A_csp, A)
+        else
+            print*, "Invalid mapping ", mapping
+            call abort()
+        end if
+
+        call free_csr_mat(A_csr)
+        call free_csp_mat(A_csp)
+
+    end subroutine
 
 end module io

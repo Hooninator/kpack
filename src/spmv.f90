@@ -1,6 +1,7 @@
 module spmv
 use utils
 use csr
+use csp
 use omp_lib
 
 implicit none
@@ -97,5 +98,46 @@ contains
 
     end subroutine spmv_permuted
 
+
+    subroutine dist_spmv_csp(A, x_loc, x_gather, y)
+        type(csp_mat), intent(in) :: A
+        real(dp), intent(in) :: x_loc(:)
+        real(dp), intent(inout) :: x_gather(:)[*]
+        real(dp), intent(inout) :: y(:)
+
+        integer :: j, i
+        integer :: colidx, offset
+        integer :: owner, loc_n
+
+        loc_n = size(x_loc, 1)
+        offset = loc_n * (this_image() - 1)
+
+        ! Populate my local image
+        do i = 1, loc_n
+            x_gather(i + offset) = x_loc(i) 
+        end do
+
+        ! Make sure everyone's done with that
+        sync all
+
+        ! Fetch remote entries 
+        do j=1, size(A%nzc, 1)
+            colidx = A%nzc(j)
+            owner = colidx / loc_n
+            x_gather(colidx) = x_gather(colidx)[owner]
+        end do
+
+        ! Perform the SpMV
+        !$OMP PARALLEL DEFAULT(SHARED) 
+        !$OMP DO
+        do i = 1, A%m
+            do j = A%rowptrs(i) + 1, A%rowptrs(i + 1)
+                y(i) = y(i) + A%vals(j + 1) * x_gather(A%colinds(j)) 
+            end do
+        end do
+        !$OMP END DO
+        !$OMP END PARALLEL
+
+    end subroutine
 
 end module spmv

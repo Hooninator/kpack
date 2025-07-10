@@ -1,6 +1,8 @@
 module lanczos
 use utils
+use co_utils
 use csr
+use csp
 use spmv
 use spmm_m
 
@@ -74,6 +76,58 @@ contains
         end do
 
     end subroutine 
+
+
+    subroutine lanczos_bidiag_dist(A, co_U, co_V, B, k)
+
+        type(csp_mat), intent(in) :: A
+        real(dp), allocatable, intent(inout) :: co_U(:,:)[:]
+        real(dp), allocatable, intent(inout) :: co_V(:,:)[:]
+        real(dp), allocatable, intent(inout) :: B(:,:)
+        integer, intent(in) :: k 
+
+        real(dp), allocatable :: co_v_gather(:)[:]
+        real(dp), allocatable :: co_u_gather(:)[:]
+
+
+        integer :: myim, nim, loc_n
+        integer :: j
+        real(dp) :: alpha, beta, n
+
+        myim = this_image()
+        nim = num_images()
+        loc_n = A%n / nim
+
+        ! All the dense matrices will be distributed row-wise
+        allocate(co_U(A%m, k)[*])
+        allocate(co_V(loc_n, k)[*])
+        allocate(co_v_gather(A%n)[*])
+        allocate(co_u_gather(A%m)[*])
+
+
+        ! B is small, so don't need to distribute
+        allocate(B(2, k))
+
+        ! Randomly initialize the first column of V
+        call rand_vec(co_V(:, 1))
+
+        n = co_norm2_dp(co_V(:, 1))
+        co_V(:, 1) = co_V(:, 1) / n
+
+        beta = 1
+        do j = 1, k
+
+            print*, "Iteration ", j
+
+            if (beta == 0) exit
+
+            co_V(:, j) = co_V(:, j) / beta
+
+            call dist_spmv_csp(A, co_V(:, j), co_v_gather, co_U(:, j))
+            
+        end do
+
+    end subroutine
 
 
     function measure_orthogonality(Q) result (err)

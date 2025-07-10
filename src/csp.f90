@@ -4,10 +4,10 @@ use csr
 implicit none
 
     type :: csp_mat
-        integer :: nblocks
-        integer :: bm, bn, m, n, nnz, bdimm, bdimn
-        integer, pointer :: block_inds(:,:)
-        type(csr_mat), pointer :: blocks(:)
+        real(dp), pointer :: vals(:)
+        integer, pointer :: colinds(:), rowptrs(:)
+        integer, pointer :: nzc(:)
+        integer :: m, n, nnz, m1, m2, n1, n2
     contains
         procedure :: map_block
     end type
@@ -18,43 +18,75 @@ contains
     subroutine dist_csp_static(A_csp, A_csp_dist)
         class(csp_mat), intent(in) :: A_csp
         class(csp_mat), intent(inout) :: A_csp_dist
-        integer :: i, j, iid, myim, image_blockrows, my_nblocks, offset
+        integer :: i, j, iid, myim, my_nnz, offset, row_len, my_rows
+        integer, allocatable :: rowcounts(:), colnz(:)
 
         myim = this_image()
 
-        A_csp_dist%bm = A_csp%bm
-        A_csp_dist%bn = A_csp%bn
-        A_csp_dist%bdimm = A_csp%m / A_csp%bm
-        A_csp_dist%bdimn = A_csp%n / A_csp%bn
-
-        A_csp_dist%m = A_csp%m
+        A_csp_dist%m1 = A_csp%m1
+        A_csp_dist%n1 = A_csp%n1
+        A_csp_dist%m2 = A_csp%m2
+        A_csp_dist%n2 = A_csp%n2
+        A_csp_dist%m = A_csp%m / num_images()
         A_csp_dist%n = A_csp%n
-        A_csp_dist%nnz = A_csp%nnz
 
-        image_blockrows = (A_csp%m / A_csp%bm) / num_images()
-        my_nblocks = 0
-
-        ! Count blocks for my image
-        do i = 1, A_csp%nblocks
-            iid = (A_csp%block_inds(1, i) - 1) / image_blockrows + 1
-            if (iid == this_image()) then
-                my_nblocks = my_nblocks + 1
-            end if
+        ! Count nnz for my image
+        my_nnz = 0 
+        do i = 1, A_csp%m
+            iid = (i - 1) / A_csp_dist%m + 1
+            do j = A_csp%rowptrs(i), A_csp%rowptrs(i+1)
+                if (iid == this_image()) then
+                    my_nnz = my_nnz + 1
+                end if
+            end do
         end do
 
-        A_csp_dist%nblocks = my_nblocks
+        A_csp_dist%nnz = my_nnz
 
         ! Allocate 
-        allocate(A_csp_dist%blocks(my_nblocks))
-        allocate(A_csp_dist%block_inds(2, my_nblocks))
+        allocate(A_csp_dist%vals(my_nnz))
+        allocate(A_csp_dist%colinds(my_nnz))
+        allocate(A_csp_dist%rowptrs(A_csp_dist%m + 1))
+        allocate(rowcounts(A_csp_dist%m))
+        allocate(colnz(A_csp_dist%n))
+        rowcounts = 0
+        colnz = 0
 
-        ! Deep copy blocks into my image
+        ! Copy data
         offset = 1
-        do i = 1, A_csp%nblocks
-            iid = (A_csp%block_inds(1, i) - 1) / image_blockrows + 1
-            if (iid == myim) then
-                A_csp_dist%block_inds(:, offset) = A_csp%block_inds(:, i)
-                call csr_deepcopy(A_csp%blocks(i), A_csp_dist%blocks(offset))
+        my_rows = 1
+        do i = 1, A_csp%m
+
+            iid = (i - 1) / A_csp_dist%m + 1
+
+            row_len = A_csp%rowptrs(i + 1) - A_csp%rowptrs(i)
+
+            if (iid == this_image()) then
+
+                A_csp_dist%vals(offset:offset+row_len-1) = A_csp%vals(A_csp%rowptrs(i) + 1:A_csp%rowptrs(i+1))
+                A_csp_dist%colinds(offset:offset+row_len-1) = A_csp%colinds(A_csp%rowptrs(i) + 1:A_csp%rowptrs(i+1))
+
+                do j = A_csp%rowptrs(i)+1, A_csp%rowptrs(i + 1)
+                    colnz(A_csp%colinds(j)) = 1
+                end do
+
+                rowcounts(my_rows) = row_len
+
+                offset = offset + row_len
+                my_rows = my_rows + 1
+
+            end if
+
+        end do
+
+        call prefix_sum_integer(rowcounts, A_csp_dist%rowptrs)
+
+        allocate(A_csp_dist%nzc(sum(colnz)))
+
+        offset = 1
+        do j = 1, A_csp_dist%n
+            if (colnz(j) == 1) then
+                A_csp_dist%nzc(offset) = j
                 offset = offset + 1
             end if
         end do
@@ -67,8 +99,8 @@ contains
         integer, intent(in) :: i, j
         integer :: idx(2)
         
-        idx(1) = ((i - 1) / self%bm) + 1
-        idx(2) = ((j - 1) / self%bn) + 1
+        idx(1) = ((i - 1) / self%m2) + 1
+        idx(2) = ((j - 1) / self%n2) + 1
 
     end function
 
@@ -78,8 +110,6 @@ contains
         type(csr_mat), intent(in) :: A_csr
         type(csp_mat) :: A_csp
 
-        integer, allocatable :: block_nnz(:, :), block_exists(:,:)
-
         real(dp), allocatable :: vals(:)
         integer, allocatable :: inds(:,:)
         integer :: i, j, k, l
@@ -87,101 +117,79 @@ contains
         integer :: block_idx(2)
         integer :: idx
 
-        logical :: marked
-
-
         ! Determine number of blocks and block size
-        A_csp%bm = A_csr%m2
-        A_csp%bn = A_csr%n2
-        A_csp%m = A_csr%m
-        A_csp%n = A_csr%n
+        A_csp%m1 = A_csr%m1
+        A_csp%n1 = A_csr%n1
+        A_csp%m2 = A_csr%m2
+        A_csp%n2 = A_csr%n2
+        A_csp%m = A_csr%m1 * A_csr%n1
+        A_csp%n = A_csr%m2 * A_csr%n2
         A_csp%nnz = A_csr%nnz
 
-        ! Count nnz in each block
-        allocate(block_nnz(A_csr%m1, A_csr%n1))
-        allocate(block_exists(A_csr%m1, A_csr%n1))
-        block_nnz = 0
-        block_exists = 0
+        allocate(A_csp%vals(A_csp%nnz))
+        allocate(A_csp%colinds(A_csp%nnz))
+        allocate(A_csp%rowptrs(A_csp%m + 1))
 
-        do i = 1, A_csr%m
-            do j = A_csr%rowptrs(i), A_csr%rowptrs(i + 1)
-                block_idx = A_csp%map_block(i, A_csr%colinds(j))
-                block_nnz(block_idx(1), block_idx(2)) = block_nnz(block_idx(1), block_idx(2)) + 1
-                block_exists(block_idx(1), block_idx(2)) = 1
-            end do
-        end do
+        allocate(vals(A_csp%nnz))
+        allocate(inds(2, A_csp%nnz))
 
-
-        A_csp%nblocks = sum(block_exists)
-        allocate(A_csp%blocks(A_csp%nblocks))
-        allocate(A_csp%block_inds(2, A_csp%nblocks))
-
-
-        ! This is bad
-        idx = 1
-        do i = 1, A_csr%m1
-            do j = 1, A_csr%n1
-
-                if (block_nnz(i,j) == 0) then
-                    cycle
-                end if
-
-                marked = .FALSE.
-
-
-                allocate(vals(block_nnz(i,j)))
-                allocate(inds(2, block_nnz(i,j)))
-                offset = 1
-
-                do k = 1, A_csr%m
-                    do l = A_csr%rowptrs(k), A_csr%rowptrs(k + 1)
-                        
-                        colidx = A_csr%colinds(l)
-
-                        if (all(A_csp%map_block(k, colidx)==[i, j])) then
-
-                            if (.NOT.marked) then
-                                A_csp%block_inds(1, idx) = k
-                                A_csp%block_inds(2, idx) = colidx
-                                marked = .TRUE.
-                            end if
-
-                            vals(offset) = A_csr%vals(l)
-
-                            inds(1, offset) = mod((k - 1), A_csr%m1) + 1
-                            inds(2, offset) = mod((colidx - 1), A_csr%n1) + 1
-
-                            offset = offset + 1
-
-                        end if
-
-                    end do
-                end do
-
-                print*, "Done with block ", idx
-                A_csp%blocks(idx) = ijv_to_csr(vals, inds, A_csp%bm, A_csp%bn)
-                idx = idx + 1
-
-                deallocate(vals)
-                deallocate(inds)
-
-            end do
-        end do
+        do k = 1, A_csr%m
+            do l = A_csr%rowptrs(k) + 1, A_csr%rowptrs(k + 1)
                 
+                colidx = A_csr%colinds(l)
 
+                block_idx = A_csp%map_block(k, colidx)
+
+                vals(l) = A_csr%vals(l)
+
+                inds(1, l) = (block_idx(1) - 1) + (block_idx(2) - 1) * A_csp%m1 + 1
+                inds(2, l) = mod((k - 1), A_csp%m2) + mod((l - 1), A_csp%n2) * A_csp%m2 + 1
+
+            end do
+        end do
+
+        call ijv_to_csp(vals, inds, A_csp)
+                
     end function
+
+
+    subroutine ijv_to_csp(vals, inds, A)
+        real(dp), intent(inout) :: vals(:)
+        integer, intent(inout) :: inds(:,:)
+        type(csp_mat), intent(inout) :: A
+
+        integer, allocatable :: sorted_inds(:), rowcounts(:)
+        integer :: i
+
+        allocate(sorted_inds(A%nnz))
+        allocate(rowcounts(A%m))
+        rowcounts = 0
+
+        call sort_index(inds(1, :), sorted_inds)
+
+        inds(2, :) = inds(2, sorted_inds(:))
+        vals(:) = vals(sorted_inds(:))
+
+        do i = 1, A%nnz
+            rowcounts(inds(1, i)) = rowcounts(inds(1, i)) + 1
+            A%vals(i) = vals(i)
+            A%colinds(i) = inds(2, i)
+        end do
+
+        call prefix_sum_integer(rowcounts, A%rowptrs)
+
+    end subroutine
+
+
 
 
     subroutine free_csp_mat(A)
         type(csp_mat), intent(inout) :: A
         integer :: i
 
-        do i = 1, A%nblocks
-            call free_csr_mat(A%blocks(i))
-        end do
-
-        deallocate(A%block_inds)
-        deallocate(A%blocks)
+        deallocate(A%vals)
+        deallocate(A%colinds)
+        deallocate(A%rowptrs)
 
     end subroutine
 

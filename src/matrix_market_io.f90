@@ -90,8 +90,6 @@ contains
 
 
         call prefix_sum_integer(rowcounts, A%rowptrs)
-        A%rowptrs(1) = 1
-
 
         close(fd)
 

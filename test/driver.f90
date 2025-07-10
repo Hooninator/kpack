@@ -4,7 +4,7 @@ program driver
 
     character(256) :: fpath
     character(5) :: maxiters_str
-    character(5) :: mode_str
+    character(10) :: mode_str
     integer :: maxiters = 20
 
     real(dp) :: err, sing

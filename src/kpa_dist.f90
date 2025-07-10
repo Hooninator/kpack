@@ -2,6 +2,7 @@ module kpa_dist
 
 use csp
 use utils
+use lanczos
 implicit none
 
 contains
@@ -15,9 +16,23 @@ contains
         ! U^TAV = B
         real(dp), allocatable :: co_U(:,:)[:]
         real(dp), allocatable :: co_V(:,:)[:]
-        real(dp), allocatable :: co_B(:,:)[:]
+        real(dp), allocatable :: B(:,:)
         
-        !allocate(co_U(A%bdimm
+        allocate(Q(A%m1, A%n1))
+        allocate(C(A%m2, A%n2))
+
+        if (this_image()==1) then
+            print*, "Q : ",A%m1,"x",A%n1
+            print*, "C : ",A%m2,"x",A%n2
+        end if
+
+        if (this_image()==1) then
+            print*, "Running lanczos..."
+        end if
+        call lanczos_bidiag_dist(A, co_U, co_V, B, maxiters)
+        if (this_image()==1) then
+            print*, "Done!"
+        end if
 
 
     end subroutine

@@ -79,6 +79,4 @@ contains
 
     end subroutine
 
-
-    
 end module utils

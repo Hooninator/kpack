@@ -95,7 +95,6 @@ contains
         end do
 
         call prefix_sum_integer(rowcounts, A%rowptrs)
-        A%rowptrs = 1
 
     end function
 
